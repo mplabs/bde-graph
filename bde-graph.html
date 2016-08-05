@@ -1,0 +1,635 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="bde-graph-dark.html">
+<link rel="import" href="bde-graph-light.html">
+
+<dom-module id="bde-graph">
+  <template>
+    <style import="bde-graph-dark"></style>
+    <style import="bde-graph-light"></style>
+    <style>
+      @font-face {
+        /* we want the svg version */
+        font-family: 'FontAwesomeSVG';
+        src: url('../font-awesome/fonts/fontawesome-webfont.svg') format('svg'),
+             url('../font-awesome/fonts/fontawesome-webfont.eot') format('embedded-opentype'),
+             url('../font-awesome/fonts/fontawesome-webfont.woff') format('woff'),
+             url('../font-awesome/fonts/fontawesome-webfont.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      :host {
+        display: block;
+      }
+    </style>
+    
+    <div id="svgcontainer"></div>
+
+  </template>
+
+  <script src="../react/react.js"></script>
+  <script src="../react/react-dom.js"></script>
+  <script src="../klayjs-noflo/klay-noflo.js"></script>
+  <script src="./build/noflo.js"></script>
+  <script src="./lib/the-graph.js"></script>
+  <script src="./lib/the-graph-app.js"></script>
+  <script src="./lib/the-graph-graph.js"></script>
+  <script src="./lib/the-graph-node.js"></script>
+  <script src="./lib/the-graph-node-menu.js"></script>
+  <script src="./lib/the-graph-node-menu-port.js"></script>
+  <script src="./lib/the-graph-node-menu-ports.js"></script>
+  <script src="./lib/the-graph-port.js"></script>
+  <script src="./lib/the-graph-edge.js"></script>
+  <script src="./lib/the-graph-iip.js"></script>
+  <script src="./lib/the-graph-group.js"></script>
+  <script src="./lib/the-graph-tooltip.js"></script>
+  <script src="./lib/the-graph-menu.js"></script>
+  <script src="./lib/the-graph-clipboard.js"></script>
+  <script src="./build/font-awesome-unicode-map.js"></script>
+  <script>
+  (function() {
+    Polymer({
+
+      is: 'bde-graph',
+
+      properties: {
+        
+        editable: {
+          type: Boolean,
+          value: true
+        },
+
+        displaySelectionGroup: {
+          type: Boolean,
+          value: true,
+          notify: true
+        },
+
+        forceSelection: {
+          type: Boolean,
+          value: false,
+          notify: true
+        },
+
+        width: {
+          type: Number,
+          notify: true,
+          value: 800
+        },
+
+        height: {
+          type: Number,
+          notify: true,
+          value: 600
+        },
+
+        grid: {
+          type: Number,
+          value: 72
+        },
+
+        snap: {
+          type: Number,
+          value: 36
+        },
+
+        offsetX: {
+          type: Number,
+          notify: true,
+          value: null
+        },
+
+        offsetY: {
+          type: Number,
+          notify: true,
+          value: null
+        },
+
+        minZoom: {
+          type: Number,
+          value: 0.15,
+          notify: true
+        },
+
+        maxZoom: {
+          type: Number,
+          value: 15,
+          notify: true
+        },
+
+        pan: {
+          type: Object,
+          notify: true,
+          value: function() {
+            return {x: 0, y: 0};
+          },
+        },
+
+        scale: {
+          type: Number,
+          value: 1,
+          notify: true
+        },
+
+        theme: {
+          type: String,
+          notify: true,
+          reflectToAttribute: true,
+          value: 'dark'
+        },
+
+        autolayout: {
+          type: Boolean,
+          value: true
+        },
+
+        artifactId: {
+          type: String
+        },
+
+        slots: {
+          type: Array,
+          notify: true
+        },
+
+        members: {
+          type: Array,
+          notify: true
+        },
+
+        connections: {
+          type: Array,
+          notify: true
+        },
+
+        inits: {
+          type: Array,
+          notify: true
+        },
+
+        library: {
+          type: Object,
+          value: function() {
+            return {};
+          }
+        },
+
+        selectedMembers: {
+          type: Array,
+          notify: true
+        },
+
+        selectedConnections: {
+          type: Array,
+          notify: true
+        },
+
+        _autolayouter: Object,
+
+        _graph: Object,
+
+        _appView: Object,
+
+        _graphView: Object
+      },
+
+      observers: [
+        'artifactIdChanged(artifactId)',
+        'slotsChanged(slots.*)',
+        'membersChanged(members.*)',
+        'connectionsChanged(connections.*)',
+        'initsChanged(inits.*)',
+        'panChanged(pan)',
+        'themeChanged(theme)',
+        'dimensionsChanged(width, height)',
+        'autolayoutChanged(autolayout)',
+        'displaySelectionGroupChanged(displaySelectionGroup)',
+        'forceSelectionChanged(forceSelection)'
+      ],
+
+      created: function() {
+        // Initialize the autolayouter
+        this._autolayouter = klayNoflo.init({
+          onSuccess: this._applyAutolayout.bind(this),
+          workerScript: '../vendor/klayjs/klay.js'
+        });
+      },
+
+      attached: function() {
+        this._graph = window.noflo.graph.createGraph(this.artifactId, { caseSensitive: true });
+      },
+
+      onEdgeSelection: function(itemKey, item, toggle) {
+
+      },
+
+      artifactIdChanged: function(newArtifactId, oldArtifactId) {
+        if (!newArtifactId || (newArtifactId === oldArtifactId)) { return; }
+
+        if (!this._graph) { return; }
+
+        if (this._graph.removeListener) {
+          this._graph.removeListener('endTransaction', this.fire.bind(this, 'bde-graph-changed'));
+        }
+
+        // Listen for graph changes
+        this._graph.on('endTransaction', this.fire.bind(this, 'bde-graph-changed'));
+
+        // Fire polymer events
+        this._graph.on('addNode', this.fire.bind(this, 'bde-graph-add-node'));
+        this._graph.on('removeNode', this.fire.bind(this, 'bde-graph-remove-node'));
+        this._graph.on('addInport', this.fire.bind(this, 'bde-graph-add-inport'));
+        this._graph.on('removeInport', this.fire.bind(this, 'bde-graph-remove-inport'));
+        this._graph.on('addOutport', this.fire.bind(this, 'bde-graph-add-outport'));
+        this._graph.on('removeOutport', this.fire.bind(this, 'bde-graph-remove-outport'));
+        this._graph.on('addEdge', this.fire.bind(this, 'bde-graph-add-edge'));
+        this._graph.on('removeEdge', this.fire.bind(this, 'bde-graph-remove-edge'));
+
+        if (this._appView) {
+          // Remove previous instance
+          ReactDOM.unmountComponentAtNode(this.$.svgcontainer);
+        }
+
+        // Setup app
+        this.$.svgcontainer.innerHTML = '';
+        this._appView = ReactDOM.render(window.TheGraph.App({
+          graph: this._graph,
+          width: this.width,
+          height: this.height,
+          minZoom: this.minZoom,
+          maxZoom: this.maxZoom,
+          library: this.library,
+          // menus: this.menus,
+          displaySelectionGroup: this.displaySelectionGroup,
+          editable: this.editable,
+          forceSelection: this.forceSelection,
+          getMenuDef: this.getMenuDef,
+          onEdgeSelection: this.onEdgeSelection.bind(this),
+          onNodeSelection: this.onNodeSelection.bind(this),
+          onPanScale: this.onPanScale.bind(this),
+          offsetY: this.offsetY,
+          offsetX: this.offsetX
+        }), this.$.svgcontainer);
+        this._graphView = this._appView.refs.graph;
+      },
+
+      onEdgeSelection: function(itemKey, item, toggle) {
+        var conn, isSelected;
+
+        if (itemKey === undefined) {
+          if (this.selectedConnections.length > 0) {
+            this.splice('selectedConnections', 0, this.selectedConnections.length);
+          }
+        } else {
+          conn = this.getConnectionForEdge(item);
+          if (toggle) {
+            isSelected = !!conn;
+            if (isSelected) {
+              this.splice('selectedConnections', this.connections.indexOf(conn), 1);
+            } else {
+              this.push('selectedConnections', conn);
+            }
+          } else {
+            this.splice('selectedConnections', 0, this.selectedConnections.length);
+            this.push('selectedConnections', conn);
+          }
+        }
+
+      },
+
+      onNodeSelection: function(itemKey, item, toggle) {
+        var member, isSelected;
+
+        if (itemKey === undefined) {
+          if (this.selectedMembers.length > 0) {
+            this.splice('selectedMembers', 0, this.selectedMembers.length);
+          }
+        } else {
+          member = this.getMemberForNode(item);
+          if (toggle) {
+            isSelected = !!member;
+            if (isSelected) {
+              this.splice('selectedMembers', this.members.indexOf(member), 1);
+            } else {
+              this.push('selectedMembers', member);
+            }
+          } else {
+            this.splice('selectedMembers', 0, this.selectedMembers.length);
+            this.push('selectedMembers', conn);
+          }
+        }
+      },
+
+      onPanScale: function(x, y, scale) {
+        this.set('pan', { x: x, y: y });
+        this.set('scale', scale);
+      },
+
+
+      slotsChanged: function(changeRecord) {
+        var i, index, slot, metadata, path, key, value, collection;
+
+        if (!changeRecord) { return; }
+
+        // Slots were added or removed
+        if (changeRecord.path === 'slots.splices') {
+          changeRecord.value.indexSplices.forEach(function(s) {
+            
+            // Slots were removed
+            s.removed.forEach(function(slot) {
+              if (slot.direction.indexOf('input') !== -1) {
+                this._graph.removeInport(slot.slotId);
+              }
+              if (slot.direction.indexOf('output') !== -1) {
+                this._graph.removeOutport(slot.slotId);
+              }
+            }, this);
+
+            // Slot was added
+            for(i = 0; i < s.addedCount; i++) {
+              index = s.index + i;
+              slot = s.object[index];
+              metadata = {
+                description: slot.description
+              };
+              if (slot.direction.indexOf('input') !== -1) {
+                this._graph.addInport(slot.slotId, slot.type, metadata);
+              }
+              if (slot.direction.indexOf('output') !== -1) {
+                this._graph.addOutport(slot.slotId, slot.type, metadata);
+              }
+            }
+          }, this);
+        } else {
+          // Slot was modified
+          path = changeRecord.path.match(/slots\.(#\d+)\.(\S)$/);
+          key = path[0];
+          path = path[1].split('.');
+          value = changeRecord.value;
+          slot = Polymer.Collection.get(this.slots).getItem(key);
+          
+          // @toto: (fdu) Make it so
+          console.warn("Slot changes are not implemented, yet!" + path.join('.') + ' changed to ' + value);
+        }
+      },
+
+      membersChanged: function(changeRecord) {
+        var i, index, member, metadata, path;
+
+        if (!changeRecord) { return; }
+
+        // Members were added or remove
+        if (changeRecord.path === 'members.splices') {
+          changeRecord.value.indexSplices.forEach(function(s) {
+            // Members were removed
+            s.removed.forEach(function(member) {
+              this._graph.removeNode(member.memberId);
+            }, this);
+            // Members were added
+            for (i = 0; i < s.addedCount; i++) {
+              index = s.index + i;
+              member = s.object[index];
+              metadata = {
+                displayName: member.displayName || member.memberId,
+                description: member.description
+              };
+              this._graph.addNode(member.memberId, member.componentId, metadata);
+              if (!this.library[member.componentId]) {
+                console.warn("Component", member.componentId, "is not defined for the graph");
+              }
+            }
+          }, this);
+        } else {
+          // Member was modified
+          path = changeRecord.path.replace(/members\.#\d+(\.\S+)/, ''); // Strip everything after the index
+          member = this.get(path); // Get the referred member
+          this._graph.setNodeMetadata(member.memberId, {
+            label: member.displayName || member.memberId,
+            description: member.description
+          });
+        }
+      },
+
+      connectionsChanged: function(changeRecord) {
+        var i, index, conn, metadata, path;
+
+        if (!changeRecord) { return; }
+
+        // Connections were added or removed
+        if (changeRecord.path === 'connections.splices') {
+          changeRecord.value.indexSplices.forEach(function(s) {
+            // Connections were removed
+            s.removed.forEach(function(conn) {
+              this._graph.removeEdge(
+                conn.source.memberIdRef, conn.source.slot,
+                conn.destination.memberIdRef, conn.destination.slot
+              );
+            }, this);
+
+            // Connections were added
+            for (i = 0; i < s.addedCount; i++) {
+              index = s.index + i;
+              conn = s.object[index];
+              metadata = {
+                connectionId: conn.connectionId,
+                copyValue: conn.copyValue,
+                repeatedValues: conn.repeatedValues,
+                hookFunction: conn.hookFunction,
+                description: conn.description
+              };
+              this._graph.addEdge(
+                conn.source.memberIdRef, conn.source.slot,
+                conn.destination.memberIdRef, conn.destination.slot,
+                metadata
+              );
+            }
+          }, this);
+        } else {
+          // Connection was changed
+          path = changeRecord.path.replace(/connections\.#\d+(\.\S+)/, ''); // Strip everything after the index
+          conn = this.get(path); // Get the referred connection
+          metadata = {
+            connectionId: conn.connectionId,
+            copyValue: conn.copyValue,
+            repeatedValues: conn.repeatedValues,
+            hookFunction: conn.hookFunction,
+            description: conn.description
+          };
+          this._graph.setEdgeMetadata(
+            conn.source.memberIdRef, conn.source.slot,
+            conn.destination.memberIdRef, conn.destination.slot,
+            metadata
+          );
+        }
+      },
+
+      initsChanged: function(changeRecord) {
+        var i, index, init, metadata, path;
+
+        if (!changeRecord) { return; }
+
+        // Inits were added or removed
+        if (changeRecord.path === 'inits.splices') {
+          changeRecord.value.indexSplices.forEach(function(s) {
+            // Inits were removed
+            s.removed.forEach(function(init) {
+              this._graph.removeInitial(init.memberIdRef, init.slot);
+            });
+
+            // Inits were added
+            for (i = 0; i < s.addedCount; i++) {
+              index = s.index + i;
+              init = s.object[index];
+              metadata = {
+                description: init.description
+              };
+              this._graph.addInitial(init.value, init.memberIdRef, init.slot, metadata);
+            }
+          }, this);
+
+        } else {
+          // Init was changed
+          path = changeRecord.replace(/inits\.#\d+(\.\S+)/, ''); // Strip everything after the index
+          init = this.get(path); // Get the referred init
+          // @todo: (fdu) Make it so
+          console.warn("Init changes are not implemented, yet!", path, 'changed to', init);
+        }
+      },
+
+      panChanged: function (pan) {
+        // Send pan back to React
+        if (!this._appView) { return; }
+        this._appView.setState(pan);
+      },
+
+      themeChanged: function(theme) {
+        this.$.svgcontainer.classList.remove('bde-graph-dark', 'bde-graph-dark');
+        this.$.svgcontainer.classList.add('bde-graph-' + theme);
+      },
+
+      dimensionsChanged: function(width, height) {
+        if (!this._appView) { return; }
+        this._appView.setState({
+          width: width,
+          height: height
+        });
+      },
+
+      autolayoutChanged: function(autolayout) {
+        if (!this._graph) { return; }
+
+        // Only listen to changes that affect layout
+        if (this.autolayout) {
+          this._graph.on('addNode', this.triggerAutolayout.bind(this));
+          this._graph.on('removeNode', this.triggerAutolayout.bind(this));
+          this._graph.on('addInport', this.triggerAutolayout.bind(this));
+          this._graph.on('removeInport', this.triggerAutolayout.bind(this));
+          this._graph.on('addOutport', this.triggerAutolayout.bind(this));
+          this._graph.on('removeOutport', this.triggerAutolayout.bind(this));
+          this._graph.on('addEdge', this.triggerAutolayout.bind(this));
+          this._graph.on('removeEdge', this.triggerAutolayout.bind(this));
+        } else {
+          this._graph.removeListener('addNode', this.triggerAutolayout.bind(this));
+          this._graph.removeListener('removeNode', this.triggerAutolayout.bind(this));
+          this._graph.removeListener('addInport', this.triggerAutolayout.bind(this));
+          this._graph.removeListener('removeInport', this.triggerAutolayout.bind(this));
+          this._graph.removeListener('addOutport', this.triggerAutolayout.bind(this));
+          this._graph.removeListener('removeOutport', this.triggerAutolayout.bind(this));
+          this._graph.removeListener('addEdge', this.triggerAutolayout.bind(this));
+          this._graph.removeListener('removeEdge', this.triggerAutolayout.bind(this));
+        }
+      },
+
+      displaySelectionGroupChanged: function(displaySelectionGroup) {
+        if (!this._graphView) { return; }
+        this._graphView.setState({ displaySelectionGroup: displaySelectionGroup });
+      },
+
+      forceSelectionChanged: function(forceSelection) {
+        if (!this._graphView) { return; }
+        this._graphView.setState({ forceSelection: forceSelection });
+      },
+
+      focusMember: function(member) {
+        if (!this._graph) { return; }
+        var node = this._graph.getNode(member.memberId);
+
+        if (!node) { return; }
+        this.$._appView.focusNode(node);
+      },
+
+      getConnectionForEdge: function(edge) {
+        return this.connections.find(function(conn) {
+          return conn.source.memberIdRef === edge.from.node && conn.source.port === edge.from.slot &&
+            conn.destination.memberIdRef == edge.to.node && conn.destination.port === edge.to.slot;
+        });
+      },
+
+      getMemberForNode: function(node) {
+        return this.members.find(function(member) {
+          return member.memberId === node.id;
+        });
+      },
+
+      rerender: function(options) {
+        if (!this._graphView) { return; }
+        this._graphView.markDirty(options);
+      },
+
+      triggerFit: function() {
+        if (!this._appView) { return; }
+        this._appView.triggerFit();
+      },
+
+      _applyAutolayout: function(layoutedKGraph) {
+        var nofloNode, klayChild, idSplit, expDirection, expKey, metadata;
+
+        this._graph.startTransaction('autolayout');
+
+        // Update graph nodes with the new coordinates from KIELER graph
+        layoutedKGraph.children.forEach(function(klayNode) {
+          nofloNode = this._graph.getNode(klayNode.id);
+
+          // Nodes inside groups
+          if (klayNode.children) {
+            Object.keys(klayNode.children).forEach(function(idx) {
+              klayChild = klayNode.children[idx];
+              if (klayChild.id) {
+                this._graph.setNodeMetadata(klayChild.id, {
+                  x: Math.round((klayNode.x + klayChild.x) / this.snap) * this.snap,
+                  y: Math.round((klayNode.y + klayChild.y) / this.snap) * this.snap
+                });
+              }
+            }, this);
+          }
+
+          metadata = {
+            x: Math.round(klayNode.x / this.snap) * this.snap,
+            y: Math.round(klayNode.y / this.snap) * this.snap
+          };
+
+          // Nodes outside groups
+          if (nofloNode) {
+            this._graph.setNodeMetadata(klayNode.id, metadata);
+          } else {
+            // Find inport or outport
+            idSplit = klayNode.id.split(':::');
+            expDirection = idSplit[0];
+            expKey = idSplit[1];
+            
+            if (expDirection === 'inport' && this._graph.inports[expKey]) {
+              this._graph.setInportMetadata(expKey, metadata);
+            } else if (expDirection === 'outport' && this._graph.outports[expKey]) {
+              this._graph.setOutportMetadata(expKey, metadata);
+            }
+          }
+        }, this);
+
+        this._graph.endTransaction('autolayout');        
+
+        // Fit the window
+        this.triggerFit();
+      }
+    });
+  })();
+  </script>
+</dom-module>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <title>bde-graph demo</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes">
+    
+    <script src="../../webcomponentsjs/webcomponents-lite.js"></script>
+
+    <link rel="import" href="../../polymer/polymer.html">
+    <link rel="import" href="../bde-graph.html">
+
+    <style is="custom-style">
+      body {
+        margin: 0;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+
+    <template is="dom-bind" id="app">
+      <bde-graph id="graph"></bde-graph>
+    </template>
+
+    <script>
+    (function() {
+      "use strict";
+
+      var app = document.querySelector('#app');
+
+      app.addEventListener('dom-change', function() {
+        this.$.graph.artifactId = 'test-compound';
+      });
+    })();
+    </script>
+  </body>
+</html>
