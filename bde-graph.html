@@ -19,32 +19,33 @@
       }
       :host {
         display: block;
+        width: 100%;
+        height: 100%;
       }
     </style>
     
     <div id="svgcontainer"></div>
 
   </template>
-
-  <script src="../react/react.js"></script>
-  <script src="../react/react-dom.js"></script>
-  <script src="../klayjs-noflo/klay-noflo.js"></script>
-  <script src="./build/noflo.js"></script>
-  <script src="./lib/the-graph.js"></script>
-  <script src="./lib/the-graph-app.js"></script>
-  <script src="./lib/the-graph-graph.js"></script>
-  <script src="./lib/the-graph-node.js"></script>
-  <script src="./lib/the-graph-node-menu.js"></script>
-  <script src="./lib/the-graph-node-menu-port.js"></script>
-  <script src="./lib/the-graph-node-menu-ports.js"></script>
-  <script src="./lib/the-graph-port.js"></script>
-  <script src="./lib/the-graph-edge.js"></script>
-  <script src="./lib/the-graph-iip.js"></script>
-  <script src="./lib/the-graph-group.js"></script>
-  <script src="./lib/the-graph-tooltip.js"></script>
-  <script src="./lib/the-graph-menu.js"></script>
-  <script src="./lib/the-graph-clipboard.js"></script>
-  <script src="./build/font-awesome-unicode-map.js"></script>
+  <script src="../react/react.js" defer></script>
+  <script src="../react/react-dom.js" defer></script>
+  <script src="../klayjs-noflo/klay-noflo.js" defer></script>
+  <script src="./lib/noflo-cubbles.js" defer></script>
+  <script src="./lib/the-graph.js" defer></script>
+  <script src="./lib/the-graph-app.js" defer></script>
+  <script src="./lib/the-graph-graph.js" defer></script>
+  <script src="./lib/the-graph-node.js" defer></script>
+  <script src="./lib/the-graph-node-menu.js" defer></script>
+  <script src="./lib/the-graph-node-menu-port.js" defer></script>
+  <script src="./lib/the-graph-node-menu-ports.js" defer></script>
+  <script src="./lib/the-graph-port.js" defer></script>
+  <script src="./lib/the-graph-edge.js" defer></script>
+  <script src="./lib/the-graph-iip.js" defer></script>
+  <script src="./lib/the-graph-group.js" defer></script>
+  <script src="./lib/the-graph-tooltip.js" defer></script>
+  <script src="./lib/the-graph-menu.js" defer></script>
+  <script src="./lib/the-graph-clipboard.js" defer></script>
+  <script src="./build/font-awesome-unicode-map.js" defer></script>
   <script>
   (function() {
     Polymer({
@@ -73,12 +74,14 @@
         width: {
           type: Number,
           notify: true,
+          reflectToAttribute: true,
           value: 800
         },
 
         height: {
           type: Number,
           notify: true,
+          reflectToAttribute: true,
           value: 600
         },
 
@@ -148,25 +151,44 @@
 
         slots: {
           type: Array,
-          notify: true
+          notify: true,
+          value: function() {
+            return [];
+          }
         },
 
         members: {
           type: Array,
-          notify: true
+          notify: true,
+          value: function() {
+            return [];
+          }
         },
 
         connections: {
           type: Array,
-          notify: true
+          notify: true,
+          value: function() {
+            return [];
+          }
         },
 
         inits: {
           type: Array,
-          notify: true
+          notify: true,
+          value: function() {
+            return [];
+          }
         },
 
         library: {
+          type: Object,
+          value: function() {
+            return {};
+          }
+        },
+
+        menus: {
           type: Object,
           value: function() {
             return {};
@@ -183,13 +205,29 @@
           notify: true
         },
 
-        _autolayouter: Object,
+        _autolayouter: {
+          type: Object,
+          value: function() {
+            return {};
+          }
+        },
 
-        _graph: Object,
+        _graph: {
+          type: Object,
+          value: function() {
+            return {};
+          }
+        },
 
-        _appView: Object,
+        _appView: {
+          type: Object,
+          value: null
+        },
 
-        _graphView: Object
+        _graphView: {
+          type: Object,
+          value: null
+        }
       },
 
       observers: [
@@ -206,70 +244,34 @@
         'forceSelectionChanged(forceSelection)'
       ],
 
+      listeners: {
+        'svgcontainer.track': 'onTrack'
+      },
+
       created: function() {
         // Initialize the autolayouter
         this._autolayouter = klayNoflo.init({
           onSuccess: this._applyAutolayout.bind(this),
-          workerScript: '../vendor/klayjs/klay.js'
+          workerScript: '/bower_components/klayjs/klay.js'
         });
+
+        // Attach context menus
+        this.defineMenus();
       },
 
       attached: function() {
-        this._graph = window.noflo.graph.createGraph(this.artifactId, { caseSensitive: true });
+        window.addEventListener('resize', this.onResize.bind(this));
+        this.onResize();        
       },
 
-      onEdgeSelection: function(itemKey, item, toggle) {
-
+      onResize: function(event) {
+        this.width = this.parentElement.offsetWidth;
+        this.height = this.parentElement.offsetHeight;
       },
 
-      artifactIdChanged: function(newArtifactId, oldArtifactId) {
-        if (!newArtifactId || (newArtifactId === oldArtifactId)) { return; }
-
-        if (!this._graph) { return; }
-
-        if (this._graph.removeListener) {
-          this._graph.removeListener('endTransaction', this.fire.bind(this, 'bde-graph-changed'));
-        }
-
-        // Listen for graph changes
-        this._graph.on('endTransaction', this.fire.bind(this, 'bde-graph-changed'));
-
-        // Fire polymer events
-        this._graph.on('addNode', this.fire.bind(this, 'bde-graph-add-node'));
-        this._graph.on('removeNode', this.fire.bind(this, 'bde-graph-remove-node'));
-        this._graph.on('addInport', this.fire.bind(this, 'bde-graph-add-inport'));
-        this._graph.on('removeInport', this.fire.bind(this, 'bde-graph-remove-inport'));
-        this._graph.on('addOutport', this.fire.bind(this, 'bde-graph-add-outport'));
-        this._graph.on('removeOutport', this.fire.bind(this, 'bde-graph-remove-outport'));
-        this._graph.on('addEdge', this.fire.bind(this, 'bde-graph-add-edge'));
-        this._graph.on('removeEdge', this.fire.bind(this, 'bde-graph-remove-edge'));
-
-        if (this._appView) {
-          // Remove previous instance
-          ReactDOM.unmountComponentAtNode(this.$.svgcontainer);
-        }
-
-        // Setup app
-        this.$.svgcontainer.innerHTML = '';
-        this._appView = ReactDOM.render(window.TheGraph.App({
-          graph: this._graph,
-          width: this.width,
-          height: this.height,
-          minZoom: this.minZoom,
-          maxZoom: this.maxZoom,
-          library: this.library,
-          // menus: this.menus,
-          displaySelectionGroup: this.displaySelectionGroup,
-          editable: this.editable,
-          forceSelection: this.forceSelection,
-          getMenuDef: this.getMenuDef,
-          onEdgeSelection: this.onEdgeSelection.bind(this),
-          onNodeSelection: this.onNodeSelection.bind(this),
-          onPanScale: this.onPanScale.bind(this),
-          offsetY: this.offsetY,
-          offsetX: this.offsetX
-        }), this.$.svgcontainer);
-        this._graphView = this._appView.refs.graph;
+      onTrack: function(event) {
+        // Don't propagate track events beyond the graph
+        event.stopPropagation();
       },
 
       onEdgeSelection: function(itemKey, item, toggle) {
@@ -324,6 +326,199 @@
         this.set('scale', scale);
       },
 
+      debounceLibraryRefresh: function() {
+        this.debounce('debounceLibraryRefresh', function() {
+          this.rerender({ libraryDirty: true });
+        }, 200);
+      },
+
+      /**
+       * Define the circular context menus for the graph
+       */
+      defineMenus: function() {
+        var pasteMenu = {
+          icon: 'paste',
+          iconLabel: 'paste',
+          action: function(graph, itemKey, item) {
+            var pasted = TheGraph.Clipboard.paste(graph);
+            this.set('selectedMembers', pasted.nodes.map(this.getMemberForNode));
+            this.set('selectedConnections', []);
+          }.bind(this)
+        };
+
+        var nodeActions = {
+          delete: function(graph, itemKey, item) {
+            var member = this.getMemberForNode(item);
+            var index = this.members.indexOf(member);
+            this.splice('members', index, 1);
+
+            // Remove selection
+            var newSelection = this.selectedMembers.filter(function(selected) {
+              return selected !== member;
+            });
+            this.set('selectedMembers', newSelection);
+          }.bind(this),
+
+          copy: function(graph, itemKey, item) {
+            // @todo: (fdu) handle this
+            // TheGraph.Clipboard.copy(graph, [itemKey]);
+          }.bind(this)
+        };
+
+        var edgeActions = {
+          delete: function(graph, itemKey, item) {
+            var connection = this.getConnectionForEdge(item);
+            var index = this.connections.indexOf(connection);
+            this.splice('connections', index, 1);
+
+            // Remove selection
+            var newSelection = this.selectedConnections.filter(function(selected) {
+              return selected !== connection;
+            });
+            this.set('selectedConnections', newSelection);
+          }.bind(this)
+        };
+
+        this.set('menus', {
+
+          // Background
+          main: {
+            icon: 'sitemap',
+            e4: pasteMenu
+          },
+
+          // Connection
+          edge: {
+            actions: edgeActions,
+            icon: 'long-arrow-right',
+            s4: {
+              icon: 'trash-o',
+              iconLabel: 'delete',
+              actions: edgeActions.delete
+            }
+          },
+
+          // Members
+          node: {
+            actions: nodeActions,
+            s4: {
+              icon: 'trash-o',
+              iconLabel: 'delete',
+              action: nodeActions.delete
+            },
+            w4: {
+              icon: 'copy',
+              iconLabel: 'copy',
+              action: nodeActions.copy
+            }
+          },
+
+          // Add importing and exporting of ports here,
+          // if necessary
+
+          // Selection
+          selection: {
+            icon: 'th',
+            w4: {
+              icon: 'copy',
+              iconLabel: 'copy',
+              action: function(graph, itemKey, item) {
+                TheGraph.Clipboard.copy(graph, item.nodes);
+              }
+            },
+            e4: pasteMenu
+          }
+        });        
+      },
+
+      /**
+       * This is called by the graph, when a context menu is shown.
+       */
+      getMenuDef: function(options) {
+        var defaultMenu;
+
+        // Options: type, graph, itemKey, item
+        if (options.type && this.menus[options.type]) {
+          defaultMenu = this.menus[options.type];
+          if (defaultMenu.callback) {
+            return defaultMenu.callback(defaultMenu, options);
+          }
+          return defaultMenu;
+        }
+      },
+
+      /**
+       * This will register a component with the graph
+       * and force a rerender
+       */
+      registerComponent: function(definition) {
+        var component = this.library[definition.name];
+        if (component) {
+          // Don't override real definition with dummy
+          return;
+        }
+        this.library[definition.name] = definition;
+        this.notifyPath('library', this.library);
+
+        // Render changes
+        this.debounceLibraryRefresh();
+      },
+
+      /**
+       * Assume the artifact has changed, when artifactId has changed
+       * and (re)build the graph.
+       */
+      artifactIdChanged: function(newArtifactId, oldArtifactId) {
+        if (!newArtifactId || (newArtifactId === oldArtifactId)) { return; }
+
+        if (!this._graph) { return; }
+
+        if (this._graph.removeListener) {
+          this._graph.removeListener('endTransaction', this.fire.bind(this, 'bde-graph-changed'));
+        }
+
+        this._graph = window.createGraph(this.artifactId, { caseSensitive: true });
+
+        // Listen for graph changes
+        this._graph.on('endTransaction', this.fire.bind(this, 'bde-graph-changed'));
+
+        // Fire polymer events
+        this._graph.on('addNode', this.fire.bind(this, 'bde-graph-add-node'));
+        this._graph.on('removeNode', this.fire.bind(this, 'bde-graph-remove-node'));
+        this._graph.on('addInport', this.fire.bind(this, 'bde-graph-add-inport'));
+        this._graph.on('removeInport', this.fire.bind(this, 'bde-graph-remove-inport'));
+        this._graph.on('addOutport', this.fire.bind(this, 'bde-graph-add-outport'));
+        this._graph.on('removeOutport', this.fire.bind(this, 'bde-graph-remove-outport'));
+        this._graph.on('addEdge', this.fire.bind(this, 'bde-graph-add-edge'));
+        this._graph.on('removeEdge', this.fire.bind(this, 'bde-graph-remove-edge'));
+
+        if (this._appView) {
+          // Remove previous instance
+          ReactDOM.unmountComponentAtNode(this.$.svgcontainer);
+        }
+
+        // Setup app
+        this.$.svgcontainer.innerHTML = '';
+        this._appView = ReactDOM.render(window.TheGraph.App({
+          graph: this._graph,
+          width: this.width,
+          height: this.height,
+          minZoom: this.minZoom,
+          maxZoom: this.maxZoom,
+          library: this.library,
+          menus: this.menus,
+          getMenuDef: this.getMenuDef,
+          displaySelectionGroup: this.displaySelectionGroup,
+          editable: this.editable,
+          forceSelection: this.forceSelection,
+          onEdgeSelection: this.onEdgeSelection.bind(this),
+          onNodeSelection: this.onNodeSelection.bind(this),
+          onPanScale: this.onPanScale.bind(this),
+          offsetY: this.offsetY,
+          offsetX: this.offsetX
+        }), this.$.svgcontainer);
+        this._graphView = this._appView.refs.graph;
+      },
 
       slotsChanged: function(changeRecord) {
         var i, index, slot, metadata, path, key, value, collection;
@@ -359,6 +554,10 @@
               }
             }
           }, this);
+        } else if (changeRecord.path === 'slots' || changeRecord.path === 'slots.length') {
+          // Slots were set
+
+          // @todo: (fdu) Do we need to do something here?
         } else {
           // Slot was modified
           path = changeRecord.path.match(/slots\.(#\d+)\.(\S)$/);
@@ -373,7 +572,7 @@
       },
 
       membersChanged: function(changeRecord) {
-        var i, index, member, metadata, path;
+        var i, index, member, metadata, path, nodesCount;
 
         if (!changeRecord) { return; }
 
@@ -388,9 +587,12 @@
             for (i = 0; i < s.addedCount; i++) {
               index = s.index + i;
               member = s.object[index];
+              nodesCount = this._graph.nodes.length;
               metadata = {
                 displayName: member.displayName || member.memberId,
-                description: member.description
+                description: member.description,
+                x: member.x || this.grid,
+                y: member.y || ((nodesCount + 1) * this.snap * 2) + (nodesCount * this.grid)
               };
               this._graph.addNode(member.memberId, member.componentId, metadata);
               if (!this.library[member.componentId]) {
@@ -398,6 +600,10 @@
               }
             }
           }, this);
+        } else if (changeRecord.path === 'members' || changeRecord.path === 'members.length') {
+          // Members were set
+
+          // @todo: (fdu) Do we need to do something here?
         } else {
           // Member was modified
           path = changeRecord.path.replace(/members\.#\d+(\.\S+)/, ''); // Strip everything after the index
@@ -443,6 +649,10 @@
               );
             }
           }, this);
+        } else if (changeRecord.path === 'connections' || changeRecord.path === 'connections.length') {
+          // Connections were set
+
+          // @todo: (fdu) Do we need to do something here?
         } else {
           // Connection was changed
           path = changeRecord.path.replace(/connections\.#\d+(\.\S+)/, ''); // Strip everything after the index
@@ -485,7 +695,10 @@
               this._graph.addInitial(init.value, init.memberIdRef, init.slot, metadata);
             }
           }, this);
+        } else if (changeRecord.path === 'inits' || changeRecord.path === 'inits.length') {
+          // Inits were set
 
+          // @todo: (fdu) Do we need to do something here?
         } else {
           // Init was changed
           path = changeRecord.replace(/inits\.#\d+(\.\S+)/, ''); // Strip everything after the index
