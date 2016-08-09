@@ -197,12 +197,18 @@
 
         selectedMembers: {
           type: Array,
-          notify: true
+          notify: true,
+          value: function() {
+            return [];
+          }
         },
 
         selectedConnections: {
           type: Array,
-          notify: true
+          notify: true,
+          value: function() {
+            return [];
+          }
         },
 
         _autolayouter: {
@@ -241,11 +247,17 @@
         'dimensionsChanged(width, height)',
         'autolayoutChanged(autolayout)',
         'displaySelectionGroupChanged(displaySelectionGroup)',
-        'forceSelectionChanged(forceSelection)'
+        'forceSelectionChanged(forceSelection)',
+        'selectedMembersChanged(selectedMembers.splices)',
+        'selectedConnectionsChanged(selectedConnections.splices)'
       ],
 
       listeners: {
-        'svgcontainer.track': 'onTrack'
+        'svgcontainer.track': 'noop',
+        'svgcontainer.tap': 'noop',
+        'svgcontainer.up': 'noop',
+        'svgcontainer.down': 'noop',
+        'bde-graph-add-edge': 'onAddEdge'
       },
 
       created: function() {
@@ -269,9 +281,19 @@
         this.height = this.parentElement.offsetHeight;
       },
 
-      onTrack: function(event) {
-        // Don't propagate track events beyond the graph
+      noop: function(event) {
+        // Don't propagate events beyond the graph
         event.stopPropagation();
+      },
+
+      onAddEdge: function(event) {
+        var connection = this.getConnectionForEdge(event.detail);
+        if (!connection) {
+          this.push('connections', {
+            // @toto: (fdu) Make a new connection and add it to the stack
+          });
+          return;
+        }
       },
 
       onEdgeSelection: function(itemKey, item, toggle) {
@@ -299,25 +321,25 @@
       },
 
       onNodeSelection: function(itemKey, item, toggle) {
-        var member, isSelected;
+        var member, index, isSelected;
 
         if (itemKey === undefined) {
-          if (this.selectedMembers.length > 0) {
-            this.splice('selectedMembers', 0, this.selectedMembers.length);
+          this.splice('selectedMembers', 0, this.selectedMembers.length);
+          return;
+        }
+
+        member = this.getMemberForNode(item);
+        index = this.selectedMembers.indexOf(member);
+        if (toggle) {
+          isSelected = (index !== -1);
+          if (isSelected) {
+            this.splice('selectedMembers', this.selectedMembers.indexOf(member), 1);
+          } else {
+            this.push('selectedMembers', member);
           }
         } else {
-          member = this.getMemberForNode(item);
-          if (toggle) {
-            isSelected = !!member;
-            if (isSelected) {
-              this.splice('selectedMembers', this.members.indexOf(member), 1);
-            } else {
-              this.push('selectedMembers', member);
-            }
-          } else {
-            this.splice('selectedMembers', 0, this.selectedMembers.length);
-            this.push('selectedMembers', conn);
-          }
+          this.splice('selectedMembers', 0, this.selectedMembers.length);
+          this.push('selectedMembers', member);
         }
       },
 
@@ -708,6 +730,25 @@
         }
       },
 
+      selectedMembersChanged: function(changeRecord) {
+        if (!changeRecord || !this._graphView) { return; }
+
+        var selectedNodesHash = {};
+        this.selectedMembers.forEach(function(member) {
+          selectedNodesHash[member.memberId] = true;
+        });
+
+        this._graphView.setSelectedNodes(selectedNodesHash);
+      },
+
+      selectedConnectionsChanged: function(changeRecord) {
+        if (!changeRecord || !this._graphView) { return; }
+
+        this._graphView.setSelectedEdges(
+          this.selectedConnections.map(this.getEdgeFromConnection)
+        );
+      },
+
       panChanged: function (pan) {
         // Send pan back to React
         if (!this._appView) { return; }
@@ -715,8 +756,8 @@
       },
 
       themeChanged: function(theme) {
-        this.$.svgcontainer.classList.remove('bde-graph-dark', 'bde-graph-dark');
-        this.$.svgcontainer.classList.add('bde-graph-' + theme);
+        this.$.svgcontainer.classList.remove('the-graph-dark', 'the-graph-dark');
+        this.$.svgcontainer.classList.add('the-graph-' + theme);
       },
 
       dimensionsChanged: function(width, height) {
@@ -775,6 +816,20 @@
           return conn.source.memberIdRef === edge.from.node && conn.source.port === edge.from.slot &&
             conn.destination.memberIdRef == edge.to.node && conn.destination.port === edge.to.slot;
         });
+      },
+
+      getEdgeFromConnection: function(connection) {
+        return {
+          'from': {
+            'node': connection.source.memberIdRef,
+            'port': connection.source.slot
+          },
+          'to': {
+            'node': connection.destination.memberIdRef,
+            'port': connection.destination.slot
+          },
+          'metadata': {}
+        };
       },
 
       getMemberForNode: function(node) {
