@@ -233,6 +233,14 @@
         _graphView: {
           type: Object,
           value: null
+        },
+
+        _selectedEdges: {
+          type: Array,
+          notify: true,
+          value: function() {
+            return [];
+          }
         }
       },
 
@@ -249,7 +257,7 @@
         'displaySelectionGroupChanged(displaySelectionGroup)',
         'forceSelectionChanged(forceSelection)',
         'selectedMembersChanged(selectedMembers.splices)',
-        'selectedConnectionsChanged(selectedConnections.splices)'
+        '_selectedEdgesChanged(_selectedEdges.splices)'
       ],
 
       listeners: {
@@ -297,27 +305,29 @@
       },
 
       onEdgeSelection: function(itemKey, item, toggle) {
-        var conn, isSelected;
+        var index, isSelected, shallowClone;
 
         if (itemKey === undefined) {
-          if (this.selectedConnections.length > 0) {
-            this.splice('selectedConnections', 0, this.selectedConnections.length);
+          if (this._selectedEdges.length > 0) {
+            this.splice('_selectedEdges', 0, this._selectedEdges.length);
           }
         } else {
-          conn = this.getConnectionForEdge(item);
           if (toggle) {
-            isSelected = !!conn;
+            index = this._selectedEdges.indexOf(item);
+            isSelected = index !== -1;
+            shallowClone = this._selectedEdges.slice();
             if (isSelected) {
-              this.splice('selectedConnections', this.connections.indexOf(conn), 1);
+              shallowClone.splice(index, 1);
+              this.set('_selectedEdges', shallowClone);
             } else {
-              this.push('selectedConnections', conn);
+              shallowClone.push(item);
+              this.set('_selectedEdges', shallowClone);
             }
           } else {
-            this.splice('selectedConnections', 0, this.selectedConnections.length);
-            this.push('selectedConnections', conn);
+            this.splice('_selectedEdges', 0, this._selectedEdges.length);
+            this.push('_selectedEdges', item);
           }
         }
-
       },
 
       onNodeSelection: function(itemKey, item, toggle) {
@@ -741,12 +751,28 @@
         this._graphView.setSelectedNodes(selectedNodesHash);
       },
 
-      selectedConnectionsChanged: function(changeRecord) {
+      _selectedEdgesChanged: function(changeRecord) {
+        var i, conn, index;
+
         if (!changeRecord || !this._graphView) { return; }
 
-        this._graphView.setSelectedEdges(
-          this.selectedConnections.map(this.getEdgeFromConnection)
-        );
+        changeRecord.indexSplices.forEach(function(s) {
+          s.removed.forEach(function(edge) {
+            conn = this.getConnectionForEdge(edge);
+            index = this.selectedConnections.indexOf(edge);
+            this.splice('selectedConnections', index, 1);
+          }, this);
+
+          for (i=0; i < s.addedCount; i++) {
+            index = s.index + i;
+            conn = s.object[index];
+            this.push('selectedConnections', conn);
+          }
+        }, this);
+
+
+        this._graphView.setSelectedEdges(this._selectedEdges);
+        this.fire('edges', this._selectedEdges);
       },
 
       panChanged: function (pan) {
@@ -824,11 +850,11 @@
             'node': connection.source.memberIdRef,
             'port': connection.source.slot
           },
+          'metadata': {},
           'to': {
             'node': connection.destination.memberIdRef,
             'port': connection.destination.slot
-          },
-          'metadata': {}
+          }
         };
       },
 
@@ -846,6 +872,31 @@
       triggerFit: function() {
         if (!this._appView) { return; }
         this._appView.triggerFit();
+      },
+
+      triggerAutolayout: function() {
+        var portInfo = this._graphView ? this._graphView.portInfo : null;
+
+        // Call the autolayouter
+        this._autolayouter.layout({
+          'graph': this._graph,
+          'portInfo': portInfo,
+          'direction': 'RIGHT',
+          'options': {
+            'intCoordinates': true,
+            'algorithm': 'de.cau.cs.kieler.klay.layered',
+            'layoutHierarchy': true,
+            'spacing': 36,
+            'borderSpacing': 20,
+            'edgeSpacingFactor': 0.2,
+            'inLayerSpacingFactor': 2,
+            'nodePlace': 'BRANDES_KOEPF',
+            'nodeLayering': 'NETWORK_SIMPLEX',
+            'edgeRouting': 'POLYLINE',
+            'crossMin': 'LAYER_SWEEP',
+            'direction': 'RIGHT'
+          }
+        });
       },
 
       _applyAutolayout: function(layoutedKGraph) {

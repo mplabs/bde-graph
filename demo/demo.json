@@ -1,0 +1,235 @@
+{
+  "components": [
+    {
+      "name": "cubx-structure-viewer",
+      "icon": "cogs",
+      "inports": [
+        {
+          "name": "schemaLoaded",
+          "type": "boolean"
+        }, {
+          "name": "manifestLoaded",
+          "type": "boolean"
+        }, {
+          "name": "manifest",
+          "type": "object"
+        }, {
+          "name": "schema",
+          "type": "object"
+        }
+      ],
+      "outports": [
+        {
+          "name": "manifest",
+          "type": "object"
+        },
+        {
+          "name": "currentComponentArtifactId",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "cubx-component-viewer",
+      "icon": "eye",
+      "inports": [
+        {
+          "name": "componentArtifactId",
+          "type": "string"
+        },
+        {
+          "name": "manifest",
+          "type": "object"
+        },
+        {
+          "name": "viewerWidth",
+          "type": "string"
+        },
+        {
+          "name": "viewerHeight",
+          "type": "string"
+        },
+        {
+          "name": "viewerTitle",
+          "type": "string"
+        },
+        {
+          "name": "showTitle",
+          "type": "boolean"
+        }
+      ],
+      "outports": [
+        {
+          "name": "component",
+          "type": "object"
+        }
+      ]
+    },
+    {
+      "name": "cubx-component-info-viewer",
+      "icon": "info",
+      "inports": [
+        {
+          "name": "component",
+          "type": "object"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        }
+      ],
+      "outports": []
+    },
+    {
+      "name": "ajax-request",
+      "icon": "download",
+      "inports": [
+        {
+          "name": "config",
+          "type": "object"
+        }
+      ],
+      "outports": [
+        {
+          "name": "status",
+          "type": "string"
+        },
+        {
+          "name": "result",
+          "type": "object"
+        }
+      ]
+    }
+  ],
+  "members": [
+    {
+      "memberId": "componentViewer",
+      "componentId": "cubx-component-viewer"
+    },
+    {
+      "memberId": "structureViewer",
+      "componentId": "cubx-structure-viewer"
+    },
+    {
+      "memberId": "manifestRequester",
+      "componentId": "ajax-request"
+    },
+    {
+      "memberId": "schemaRequester",
+      "componentId": "ajax-request"
+    }
+  ],
+  "slots": [
+    {
+      "slotId": "schemaUrl",
+      "type": "string",
+      "description": "Url of the JSON schema of the webpackage manifest. By default it is the url of the 'manifestWebpackage-8.3.1.schema.json' in GitHub",
+      "direction": [ "input" ]
+    },
+    {
+      "slotId": "manifestUrl",
+      "description": "Url of the webpackage manifest. It can be relative or absolute.",
+      "type": "string",
+      "direction": [ "input" ]
+    }
+  ],
+  "inits": [
+    {
+      "slot": "schemaUrl",
+      "value": "https://raw.githubusercontent.com/cubbles/cubx-webpackage-document-api/master/lib/jsonSchema/manifestWebpackage-8.3.1.schema.json"
+    }
+  ],
+  "connections": [
+    {
+      "connectionId": "manifestUrlCon",
+      "source": {
+        "slot": "manifestUrl"
+      },
+      "destination": {
+        "memberIdRef": "manifestRequester",
+        "slot": "config"
+      },
+      "hookFunction": "window.com_incowia_cubxWebpackageViewer_cubxWebpackageViewer.buildConfigObject"
+    },
+    {
+      "connectionId": "manifestLoadedCon",
+      "source": {
+        "memberIdRef": "manifestRequester",
+        "slot": "status"
+      },
+      "destination": {
+        "memberIdRef": "structureViewer",
+        "slot": "manifestLoaded"
+      },
+      "hookFunction": "window.com_incowia_cubxWebpackageViewer_cubxWebpackageViewer.isLoaded"
+    },
+    {
+      "connectionId": "resultToManifest",
+      "source": {
+        "memberIdRef": "manifestRequester",
+        "slot": "result"
+      },
+      "destination": {
+        "memberIdRef": "structureViewer",
+        "slot": "manifest"
+      }
+    },
+    {
+      "connectionId": "schemaUrlCon",
+      "source": {
+        "slot": "schemaUrl"
+      },
+      "destination": {
+        "memberIdRef": "schemaRequester",
+        "slot": "config"
+      },
+      "hookFunction": "window.com_incowia_cubxWebpackageViewer_cubxWebpackageViewer.buildConfigObject"
+    },
+    {
+      "connectionId": "schemaLoadedCon",
+      "source": {
+        "memberIdRef": "schemaRequester",
+        "slot": "status"
+      },
+      "destination": {
+        "memberIdRef": "structureViewer",
+        "slot": "schemaLoaded"
+      },
+      "hookFunction": "window.com_incowia_cubxWebpackageViewer_cubxWebpackageViewer.isLoaded"
+    },
+    {
+      "connectionId": "resultToSchema",
+      "source": {
+        "memberIdRef": "schemaRequester",
+        "slot": "result"
+      },
+      "destination": {
+        "memberIdRef": "structureViewer",
+        "slot": "schema"
+      }
+    },
+    {
+      "connectionId": "currentComponentIdCon",
+      "source": {
+        "memberIdRef": "structureViewer",
+        "slot": "currentComponentArtifactId"
+      },
+      "destination": {
+        "memberIdRef": "componentViewer",
+        "slot": "componentArtifactId"
+      },
+      "repeatedValues": true
+    },
+    {
+      "connectionId": "manifestCon",
+      "source": {
+        "memberIdRef": "structureViewer",
+        "slot": "manifest"
+      },
+      "destination": {
+        "memberIdRef": "componentViewer",
+        "slot": "manifest"
+      }
+    }
+  ]
+}
