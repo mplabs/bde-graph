@@ -295,12 +295,26 @@
       },
 
       onAddEdge: function(event) {
-        var connection = this.getConnectionForEdge(event.detail);
+        var edge = event.detail;
+        var connection = this.getConnectionForEdge(edge);
         if (!connection) {
           this.push('connections', {
-            // @toto: (fdu) Make a new connection and add it to the stack
+            'connectionId': makeConnectionId(edge),
+            'destination': {
+              'memberIdRef': edge.to.node,
+              'slot': edge.to.port
+            },
+            'source': {
+              'memberIdRef': edge.from.node,
+              'slot': edge.from.port
+            }
           });
           return;
+        }
+
+        function makeConnectionId(edge) {
+          return (edge.from.node || 'this') + '::' + edge.from.port + '-' + 
+            (edge.to.node || 'this') + '::' + edge.to.port;
         }
       },
 
@@ -839,8 +853,10 @@
 
       getConnectionForEdge: function(edge) {
         return this.connections.find(function(conn) {
-          return conn.source.memberIdRef === edge.from.node && conn.source.port === edge.from.slot &&
-            conn.destination.memberIdRef == edge.to.node && conn.destination.port === edge.to.slot;
+          return conn.source.memberIdRef === edge.from.node &&
+                 conn.source.slot === edge.from.port &&
+                 conn.destination.memberIdRef == edge.to.node &&
+                 conn.destination.slot === edge.to.port;
         });
       },
 

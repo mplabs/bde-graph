@@ -56,7 +56,7 @@
       app.addEventListener('dom-change', function() {
         this.$.graph.artifactId = 'test-compound';
 
-        fetch('demo.json').then(r => r.json())
+        fetch('debug.json').then(r => r.json())
           .then(demo => {
             demo.components.forEach(
               definition => this.$.graph.registerComponent(definition)
