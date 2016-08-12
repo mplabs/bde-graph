@@ -142,6 +142,24 @@
         "memberIdRef": "componentViewer",
         "slot": "manifest"
       }
+    }, {
+      "connectionId": "whoNeedsThis",
+      "source": {
+        "slot": "manifestUrl"
+      },
+      "destination": {
+        "memberIdRef": "structureViewer",
+        "slot": "manifest"
+      }
+    }, {
+      "connectionId": "whoNeedsThisAnyway",
+      "source": {
+        "slot": "schemaUrl"
+      },
+      "destination": {
+        "memberIdRef": "structureViewer",
+        "slot": "schema"
+      }
     }
   ]
 }
