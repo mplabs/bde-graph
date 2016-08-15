@@ -29,7 +29,7 @@
   </template>
   <script src="../react/react.js" defer></script>
   <script src="../react/react-dom.js" defer></script>
-  <script src="../klayjs-noflo/klay-noflo.js" defer></script>
+  <script src="./lib/klay-cubbles.js" defer></script>
   <script src="./lib/noflo-cubbles.js" defer></script>
   <script src="./lib/the-graph.js" defer></script>
   <script src="./lib/the-graph-app.js" defer></script>
@@ -270,7 +270,7 @@
 
       created: function() {
         // Initialize the autolayouter
-        this._autolayouter = klayNoflo.init({
+        this._autolayouter = klayCubbles.init({
           onSuccess: this._applyAutolayout.bind(this),
           workerScript: '/bower_components/klayjs/klay.js'
         });

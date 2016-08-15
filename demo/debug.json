@@ -123,6 +123,11 @@
       "description": "Url of the webpackage manifest. It can be relative or absolute.",
       "type": "string",
       "direction": [ "input" ]
+    },
+    {
+      "slotId": "component",
+      "type": "string",
+      "direction": [ "output" ]
     }
   ],
   "inits": [
@@ -159,6 +164,15 @@
       "destination": {
         "memberIdRef": "structureViewer",
         "slot": "schema"
+      }
+    }, {
+      "connectionId": "stillUseless",
+      "source": {
+        "memberIdRef": "componentViewer",
+        "slot": "component"
+      },
+      "destination": {
+        "slot": "component"
       }
     }
   ]
