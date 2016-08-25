@@ -294,7 +294,34 @@
         event.stopPropagation();
       },
 
-      onGraphChanged: function(transaction, metadata) {},
+      onGraphChanged: function(transaction, metadata) {
+        console.log("onGraphChanged", ...arguments);
+      },
+
+      onAddEdge: function(edge) {
+        var connection = this.getConnectionForEdge(edge);     
+        if (!connection) {
+          this.push('connections', {
+            connectionId: Math.random().toString(36).substring(2,7),
+            source: {
+              memberIdRef: edge.from.node,
+              slot: edge.from.port
+            },
+            destination: {
+              memberIdRef: edge.to.node,
+              slot: edge.to.port
+            }
+          });
+        }
+      },
+
+      onRemoveEdge: function(edge) {
+        var connection = this.getConnectionForEdge(edge);
+        var idx = this.connections.indexOf(connection);
+        if (idx !== -1) {
+          this.splice('connections', idx, 1);
+        }
+      },
 
       onAddInport: function(publicPort, port) {
         var slot = this.getSlotForPort(publicPort);
@@ -309,7 +336,7 @@
       },
 
       onRemoveInport: function(key, port) {
-        var slot = this.getSlotPort(key);
+        var slot = this.getSlotForPort(key);
         var idx = this.slots.indexOf(slot);
         if (!slot) { return; }
 
@@ -579,6 +606,37 @@
             }
           },
 
+          // Exported Slots
+          graphInport: {
+            icon: "sign-in",
+            iconColor: 2,
+            n4: {
+              label: "inport"
+            },
+            s4: {
+              icon: "trash-o",
+              iconLabel: "delete",
+              action: function(graph, itemKey, item) {
+                graph.removeInport(itemKey);
+              }
+            }
+          },
+
+          graphOutport: {
+            icon: "sign-out",
+            iconColor: 5,
+            n4: {
+              "label": "outport"
+            },
+            s4: {
+              icon: "trash-o",
+              iconLabel: "delete",
+              action: function(graph, itemKey, item) {
+                graph.removeOutport(itemKey);
+              }
+            }
+          },
+
           // Selection
           selection: {
             icon: 'th',
@@ -644,10 +702,12 @@
 
         // Listen for graph changes
         this._graph.on('endTransaction', this.onGraphChanged.bind(this));
+        this._graph.on('addEdge', this.onAddEdge.bind(this));
+        this._graph.on('removeEdge', this.onRemoveEdge.bind(this));
         this._graph.on('addInport', this.onAddInport.bind(this));
-        // this._graph.on('removeInport', this.onRemoveInport.bind(this));
+        this._graph.on('removeInport', this.onRemoveInport.bind(this));
         this._graph.on('addOutport', this.onAddOutport.bind(this));
-        // this._graph.on('removeOutport', this.onRemoveOutport.bind(this));
+        this._graph.on('removeOutport', this.onRemoveOutport.bind(this));
         this._graph.on('addInitial', this.onAddInitial.bind(this));
         this._graph.on('removeInitial', this.onRemoveInitial.bind(this));
 
