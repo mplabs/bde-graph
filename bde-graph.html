@@ -146,7 +146,8 @@
         },
 
         artifactId: {
-          type: String
+          type: String,
+          notify: true
         },
 
         slots: {
@@ -264,8 +265,7 @@
         'svgcontainer.track': 'noop',
         'svgcontainer.tap': 'noop',
         'svgcontainer.up': 'noop',
-        'svgcontainer.down': 'noop',
-        'bde-graph-add-edge': 'onAddEdge'
+        'svgcontainer.down': 'noop'
       },
 
       created: function() {
@@ -294,29 +294,92 @@
         event.stopPropagation();
       },
 
-      onAddEdge: function(event) {
-        var edge = event.detail;
-        var connection = this.getConnectionForEdge(edge);
-        if (!connection) {
-          this.push('connections', {
-            'connectionId': makeConnectionId(edge),
-            'destination': {
-              'memberIdRef': edge.to.node,
-              'slot': edge.to.port
-            },
-            'source': {
-              'memberIdRef': edge.from.node,
-              'slot': edge.from.port
-            }
-          });
-          return;
-        }
+      onGraphChanged: function(transaction, metadata) {},
 
-        function makeConnectionId(edge) {
-          return (edge.from.node || 'this') + '::' + edge.from.port + '-' + 
-            (edge.to.node || 'this') + '::' + edge.to.port;
+      onAddInport: function(publicPort, port) {
+        var slot = this.getSlotForPort(publicPort);
+        if (!slot) {
+          this.push('slots', {
+            slotId: publicPort,
+            type: port.type,
+            description: port.metadata.description,
+            direction: [ 'input' ]
+          });
         }
       },
+
+      onRemoveInport: function(key, port) {
+        var slot = this.getSlotPort(key);
+        var idx = this.slots.indexOf(slot);
+        if (!slot) { return; }
+
+        this.splice('slots', idx, 1);
+
+        if (slot.direction.length > 1) {
+          slot.direction = ['output'];
+          this.push('slots', slot);
+        }
+      },
+
+      onAddOutport: function(publicPort, port) {
+        var slot = this.getSlotForPort(publicPort);
+        if (slot) {
+          if (slot.direction.indexOf('output') === -1) {
+            this.splice('slots', this.slots.indexOf(slot), 1);
+            slot.direction.push('output');
+            this.push('slots', slot);
+          }
+        } else {
+          this.push('slots', {
+            slotId: publicPort,
+            type: port.type,
+            description: port.metadata.description,
+            direction: [ 'output' ]
+          });
+        }
+      },
+
+      onRemoveOutport: function(key, port) {
+        var slot = this.getSlotForPort(key);
+        var idx = this.slots.indexOf(slot);
+        if (!slot) { return; }
+
+        this.splice('slots', idx, 1);
+
+        if (slot.direction.length > 1) {
+          slot.direction = ['input'];
+          this.push('slots', slot);
+        }
+      },
+
+      onAddNode: function(node) {
+        var member = this.getMemberForNode(node);
+        if (!member) {
+          this.push('members', {
+            memberId: node.id,
+            component: node.component,
+            metadata: node.metadata
+          });
+        }
+      },
+
+      onRemoveNode: function(node) {
+        var member = this.getMemberForNode(node);
+        var idx = this.members.indexOf(member);
+        if (member) {
+          this.splice('members', idx, 1);
+        }
+      },
+
+      onRenameNode: function(oldId, newId) {
+        // @todo: (fdu) Do we need this?
+        // Removing a member would trigger a change in graph
+        // so this is actually a removeNode/addNode operation.
+      },
+
+      onAddInitial: function(initializer) {},
+
+      onRemoveInitial: function(initializer) {},
 
       onEdgeSelection: function(itemKey, item, toggle) {
         var index, isSelected, shallowClone;
@@ -459,8 +522,62 @@
             }
           },
 
-          // Add importing and exporting of ports here,
-          // if necessary
+          nodeInport: {
+            w4: {
+              icon: 'sign-in',
+              iconLabel: 'export',
+              action: function(graph, itemKey, item) {
+                var pub = item.port;
+
+                if (pub === 'start') {
+                  pub = 'start1';
+                }
+
+                if (pub === 'graph') {
+                  pub = 'graph1';
+                }
+
+                var count = 0;
+                // Make sure public is unique
+                while(graph.inports[pub]) {
+                  pub = item.port + (++count);
+                }
+                var priNode = graph.getNode(item.process);
+                var metadata = {
+                  x: priNode.metadata.x - 144,
+                  y: priNode.metadata.y
+                };
+                graph.addInport(pub, item.type, metadata);
+                graph.addEdge(undefined, pub, item.process, item.port, {
+                  route: 2
+                });
+              }
+            }
+          },
+
+          nodeOutport: {
+            e4: {
+              icon: 'sign-out',
+              iconLabel: 'export',
+              action: function(graph, itemKey, item) {
+                var pub = item.port;
+                var count = 0;
+                // Make sure public is unique
+                while(graph.outports[pub]) {
+                  pub = item.port + (++count);
+                }
+                var priNode = graph.getNode(item.process);
+                var metadata = {
+                  x: priNode.metadata.x + 144,
+                  y: priNode.metadata.y
+                };
+                graph.addOutport(pub, item.type, metadata);
+                graph.addEdge(item.process, item.port, undefined, pub, {
+                  route: 5
+                });
+              }
+            }
+          },
 
           // Selection
           selection: {
@@ -520,23 +637,19 @@
         if (!this._graph) { return; }
 
         if (this._graph.removeListener) {
-          this._graph.removeListener('endTransaction', this.fire.bind(this, 'bde-graph-changed'));
+          this._graph.removeListener('endTransaction', this.onGraphChanged.bind(this));
         }
 
         this._graph = window.createGraph(this.artifactId, { caseSensitive: true });
 
         // Listen for graph changes
-        this._graph.on('endTransaction', this.fire.bind(this, 'bde-graph-changed'));
-
-        // Fire polymer events
-        this._graph.on('addNode', this.fire.bind(this, 'bde-graph-add-node'));
-        this._graph.on('removeNode', this.fire.bind(this, 'bde-graph-remove-node'));
-        this._graph.on('addInport', this.fire.bind(this, 'bde-graph-add-inport'));
-        this._graph.on('removeInport', this.fire.bind(this, 'bde-graph-remove-inport'));
-        this._graph.on('addOutport', this.fire.bind(this, 'bde-graph-add-outport'));
-        this._graph.on('removeOutport', this.fire.bind(this, 'bde-graph-remove-outport'));
-        this._graph.on('addEdge', this.fire.bind(this, 'bde-graph-add-edge'));
-        this._graph.on('removeEdge', this.fire.bind(this, 'bde-graph-remove-edge'));
+        this._graph.on('endTransaction', this.onGraphChanged.bind(this));
+        this._graph.on('addInport', this.onAddInport.bind(this));
+        // this._graph.on('removeInport', this.onRemoveInport.bind(this));
+        this._graph.on('addOutport', this.onAddOutport.bind(this));
+        // this._graph.on('removeOutport', this.onRemoveOutport.bind(this));
+        this._graph.on('addInitial', this.onAddInitial.bind(this));
+        this._graph.on('removeInitial', this.onRemoveInitial.bind(this));
 
         if (this._appView) {
           // Remove previous instance
@@ -720,7 +833,7 @@
 
       initsChanged: function(changeRecord) {
         var i, index, init, metadata, path;
-
+        console.log(changeRecord);
         if (!changeRecord) { return; }
 
         // Inits were added or removed
@@ -796,7 +909,7 @@
       },
 
       themeChanged: function(theme) {
-        this.$.svgcontainer.classList.remove('the-graph-dark', 'the-graph-dark');
+        this.$.svgcontainer.classList.remove('the-graph-dark', 'the-graph-light');
         this.$.svgcontainer.classList.add('the-graph-' + theme);
       },
 
@@ -877,6 +990,12 @@
       getMemberForNode: function(node) {
         return this.members.find(function(member) {
           return member.memberId === node.id;
+        });
+      },
+
+      getSlotForPort: function(publicPort) {
+        return this.slots.find(function(slot) {
+          return slot.slotId === publicPort;
         });
       },
 
